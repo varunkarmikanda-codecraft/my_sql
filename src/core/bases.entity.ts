@@ -1,7 +1,8 @@
+import { Column } from "./column.decorator.js";
 import { TABLE_METADATA_KEY } from "./table.decorator.js";
 
 export interface IBaseEntity {
-  id: number;
+  id?: number | undefined;
 
   createdAt: Date;
   createdBy: number;
@@ -15,11 +16,16 @@ interface Pagination {
 }
 
 export abstract class BaseEntity implements IBaseEntity {
-  id: number;
+  @Column()
+  id?: number | undefined;
 
+  @Column("created_at")
   createdAt: Date;
+  @Column("created_by")
   createdBy: number;
+  @Column("updated_at")
   updatedAt: Date;
+  @Column("updated_by")
   updatedBy: number;
 
   constructor(entity: IBaseEntity) {
