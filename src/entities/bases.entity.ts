@@ -115,5 +115,26 @@ export abstract class BaseEntity implements IBaseEntity {
     // const result = await db.execute(query, Object.values(conditions))
     return false;
   }
+
+  static async update<T extends BaseEntity, I extends IBaseEntity>(this: new(entity: I) => T, columns: Partial<I>, conditions?: Partial<I>, limit?: number): Promise<number> {
+    const updateColumns = Object.keys(columns).map(key => `${key} = ?`).join(', ')
+    let updateConditions = '';
+    const queryValues: (string | number | Date)[] = [];
+    if(conditions && Object.keys(conditions).length > 0) {
+      const mappedConditions = Object.entries(conditions).map(([key, value]) => { 
+        queryValues.push(value);
+        return `${key} = ?`
+      }).join(' AND ');
+      updateConditions = `WHERE ${mappedConditions} `
+    }
+    if(limit) {
+      updateConditions += `LIMIT ${limit}`
+    }
+    const query = `UPDATE ${Reflect.getMetadata(TABLE_METADATA_KEY, this)} SET ${updateColumns} ${updateConditions}`;
+    console.log(query)
+    console.log(queryValues)
+    // const result = await db.execute(query, Object.values(columns), queryValues)
+    return 0;
+  }
   
 }

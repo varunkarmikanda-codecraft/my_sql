@@ -33,6 +33,11 @@ User.deleteAll(6, { id: 1, createdAt: new Date(), updatedBy: 56 });
 console.log()
 User.deleteOne({ name: 'varun' })
 User.deleteOne({ name: 'varun', id: 5 })
+User.update({ name: "var", updatedAt: new Date() })
+User.update({ name: "var", updatedAt: new Date() }, { id: 123})
+User.update({ name: "var", updatedAt: new Date() }, { name: "varun" })
+User.update({ name: "var", updatedAt: new Date() }, {}, 5)
+User.update({ name: "var", updatedAt: new Date() }, { id: 123 }, 6)
 
 console.log()
 
