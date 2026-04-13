@@ -20,6 +20,7 @@
     "typescript-eslint": "^8.58.1"
   },
   "dependencies": {
+    "mysql2": "^3.22.0",
     "reflect-metadata": "^0.2.2"
   }
 }
