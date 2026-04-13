@@ -9,6 +9,11 @@ export interface IBaseEntity {
   updatedBy: number;
 }
 
+interface Pagination {
+  limit?: number;
+  offset?: number;
+}
+
 export abstract class BaseEntity implements IBaseEntity {
   id: number;
 
@@ -41,20 +46,95 @@ export abstract class BaseEntity implements IBaseEntity {
     // await db.execute(query, Object.values(this));
   }
 
-  static async findById<T extends BaseEntity, I extends IBaseEntity>(this: (new (entity: I) => T) & typeof BaseEntity, id: number): Promise<T | null> {
-    const query = `SELECT * FROM ${this.getTableName()} WHERE id = ?`;
+  static async findById<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, id: number): Promise<T | null> {
+    const query = `SELECT * FROM ${Reflect.getMetadata(TABLE_METADATA_KEY, this)} WHERE id = ?`;
+    console.log(query);
+    return null;
     // const result = await db.execute(query, [id]);
     // const instance = new this(result[0]);
     // return instance;
+  }
+
+  static async findAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, pagination: Pagination = { limit: 5, offset: 0}, conditions?: Partial<I>): Promise<T[]> {
+    let findConditions = '';
+    const queryValues: (string | number | Date)[] = []
+    if(conditions) {
+      const mappedConditions = Object.entries(conditions).map(([key, value]) => {
+        queryValues.push(value)
+        return `${key} = ?`
+      }).join(' AND ')
+      findConditions = `WHERE ${mappedConditions} `
+    }
+    const query =`SELECT * FROM ${Reflect.getMetadata(TABLE_METADATA_KEY, this)} ${findConditions}LIMIT ${pagination.limit} OFFSET ${pagination.offset}`
+    console.log(query)
+    // console.log(Object.values(conditions))
+    console.log(queryValues)
+    return [];
+    // const result = await db.execute(query, queryValues);
+    // const instance = new this(result);
+    // return instance;
+  }
+
+  static async findOne<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T , conditions: Partial<I>): Promise<T | null> {
+    const findConditions = Object.keys(conditions).map(key => `${key} = ?`).join(' AND ');
+
+    const query = `SELECT * FROM ${Reflect.getMetadata(TABLE_METADATA_KEY, this)} WHERE ${findConditions} LIMIT 1`;
     console.log(query);
+    // const result = await db.execute(query, Object.values(conditions));
     return null;
   }
 
-  // TASKS:
-  // static async findAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T): Promise<T[]> 
-  // static async findOne<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions: Partial<I>): Promise<T | null> 
+  static async deleteById<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, id: number): Promise<boolean> {
+    const query = `DELETE FROM ${Reflect.getMetadata(TABLE_METADATA_KEY, this)} WHERE id = ?`;
+    console.log(query);
+    // const result = await db.execute(query, [id]);
+    return false;
+  }
 
-  // static async deleteById<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T): Promise<T[]> 
-  // static async deleteAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T): Promise<T[]> 
-  // static async deleteOne<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions: Partial<I>): Promise<T | null> 
+  static async deleteAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, limit: number = 5, conditions?: Partial<I>): Promise<number> {
+    let deleteConditions = '';
+    const queryValues: (string | number | Date)[] = []
+    if(conditions) {
+      const mappedConditions = Object.entries(conditions).map(([key, value]) => {
+        queryValues.push(value);
+        return `${key} = ?`
+      }).join(' AND ');
+      deleteConditions = `WHERE ${mappedConditions} `
+    }
+    const query = `DELETE FROM ${Reflect.getMetadata(TABLE_METADATA_KEY, this)} ${deleteConditions}LIMIT ${limit}`;
+    console.log(query);
+    console.log(queryValues)
+    // const result = await db.execute(query, queryValues);
+    return 0;
+  }
+
+  static async deleteOne<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions: Partial<I>): Promise<boolean> {
+    const deleteConditions = Object.keys(conditions).map(key => `${key} = ?`).join(' AND ')
+    const query = `DELETE FROM ${Reflect.getMetadata(TABLE_METADATA_KEY, this)} WHERE ${deleteConditions} LIMIT 1`;
+    console.log(query);
+    // const result = await db.execute(query, Object.values(conditions))
+    return false;
+  }
+
+  static async update<T extends BaseEntity, I extends IBaseEntity>(this: new(entity: I) => T, columns: Partial<I>, conditions?: Partial<I>, limit?: number): Promise<number> {
+    const updateColumns = Object.keys(columns).map(key => `${key} = ?`).join(', ')
+    let updateConditions = '';
+    const queryValues: (string | number | Date)[] = [];
+    if(conditions && Object.keys(conditions).length > 0) {
+      const mappedConditions = Object.entries(conditions).map(([key, value]) => { 
+        queryValues.push(value);
+        return `${key} = ?`
+      }).join(' AND ');
+      updateConditions = `WHERE ${mappedConditions} `
+    }
+    if(limit) {
+      updateConditions += `LIMIT ${limit}`
+    }
+    const query = `UPDATE ${Reflect.getMetadata(TABLE_METADATA_KEY, this)} SET ${updateColumns} ${updateConditions}`;
+    console.log(query)
+    console.log(queryValues)
+    // const result = await db.execute(query, Object.values(columns), queryValues)
+    return 0;
+  }
+  
 }
