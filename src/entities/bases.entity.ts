@@ -1,3 +1,4 @@
+import { DB } from "../drivers/db.js";
 import { TABLE_METADATA_KEY } from "./table.decorator.js";
 
 export interface IBaseEntity {
@@ -36,53 +37,57 @@ export abstract class BaseEntity implements IBaseEntity {
 
   async save(): Promise<void> {
     const keys = Object.keys(this);
-    const columns = keys.join(", ");
 
-    const values_placeholder = "?, ".repeat(keys.length).slice(0, -2);
+    const query = DB.driver.getInsertQuery(Reflect.getMetadata(TABLE_METADATA_KEY, this.constructor), keys);
+    await DB.driver.execute(query, Object.values(this))
 
-    const query = `INSERT INTO ${(this.constructor as typeof BaseEntity).getTableName()} (${columns}) VALUES (${values_placeholder})`;
-    console.log(query);
+    // const columns = keys.join(", ");
 
-    // await db.execute(query, Object.values(this));
+    // const values_placeholder = "?, ".repeat(keys.length).slice(0, -2);
+
+    // const query = `INSERT INTO ${(this.constructor as typeof BaseEntity).getTableName()} (${columns}) VALUES (${values_placeholder})`;
+    // console.log(query);
+
+    // // await db.execute(query, Object.values(this));
   }
 
-  static async findById<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, id: number): Promise<T | null> {
-    const query = `SELECT * FROM ${Reflect.getMetadata(TABLE_METADATA_KEY, this)} WHERE id = ?`;
-    console.log(query);
-    return null;
-    // const result = await db.execute(query, [id]);
-    // const instance = new this(result[0]);
-    // return instance;
-  }
+  // static async findById<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, id: number): Promise<T | null> {
+  //   const query = `SELECT * FROM ${Reflect.getMetadata(TABLE_METADATA_KEY, this)} WHERE id = ?`;
+  //   console.log(query);
+  //   return null;
+  //   // const result = await db.execute(query, [id]);
+  //   // const instance = new this(result[0]);
+  //   // return instance;
+  // } 
 
-  static async findAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, pagination: Pagination = { limit: 5, offset: 0}, conditions?: Partial<I>): Promise<T[]> {
-    let findConditions = '';
-    const queryValues: (string | number | Date)[] = []
-    if(conditions) {
-      const mappedConditions = Object.entries(conditions).map(([key, value]) => {
-        queryValues.push(value)
-        return `${key} = ?`
-      }).join(' AND ')
-      findConditions = `WHERE ${mappedConditions} `
-    }
-    const query =`SELECT * FROM ${Reflect.getMetadata(TABLE_METADATA_KEY, this)} ${findConditions}LIMIT ${pagination.limit} OFFSET ${pagination.offset}`
-    console.log(query)
-    // console.log(Object.values(conditions))
-    console.log(queryValues)
-    return [];
-    // const result = await db.execute(query, queryValues);
-    // const instance = new this(result);
-    // return instance;
-  }
+  // static async findAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, pagination: Pagination = { limit: 5, offset: 0}, conditions?: Partial<I>): Promise<T[]> {
+  //   let findConditions = '';
+  //   const queryValues: (string | number | Date)[] = []
+  //   if(conditions) {
+  //     const mappedConditions = Object.entries(conditions).map(([key, value]) => {
+  //       queryValues.push(value)
+  //       return `${key} = ?`
+  //     }).join(' AND ')
+  //     findConditions = `WHERE ${mappedConditions} `
+  //   }
+  //   const query =`SELECT * FROM ${Reflect.getMetadata(TABLE_METADATA_KEY, this)} ${findConditions}LIMIT ${pagination.limit} OFFSET ${pagination.offset}`
+  //   console.log(query)
+  //   // console.log(Object.values(conditions))
+  //   console.log(queryValues)
+  //   return [];
+  //   // const result = await db.execute(query, queryValues);
+  //   // const instance = new this(result);
+  //   // return instance;
+  // }
 
-  static async findOne<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T , conditions: Partial<I>): Promise<T | null> {
-    const findConditions = Object.keys(conditions).map(key => `${key} = ?`).join(' AND ');
+  // static async findOne<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T , conditions: Partial<I>): Promise<T | null> {
+  //   const findConditions = Object.keys(conditions).map(key => `${key} = ?`).join(' AND ');
 
-    const query = `SELECT * FROM ${Reflect.getMetadata(TABLE_METADATA_KEY, this)} WHERE ${findConditions} LIMIT 1`;
-    console.log(query);
-    // const result = await db.execute(query, Object.values(conditions));
-    return null;
-  }
+  //   const query = `SELECT * FROM ${Reflect.getMetadata(TABLE_METADATA_KEY, this)} WHERE ${findConditions} LIMIT 1`;
+  //   console.log(query);
+  //   // const result = await db.execute(query, Object.values(conditions));
+  //   return null;
+  // }
 
   static async deleteById<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, id: number): Promise<boolean> {
     const query = `DELETE FROM ${Reflect.getMetadata(TABLE_METADATA_KEY, this)} WHERE id = ?`;
@@ -131,10 +136,34 @@ export abstract class BaseEntity implements IBaseEntity {
       updateConditions += `LIMIT ${limit}`
     }
     const query = `UPDATE ${Reflect.getMetadata(TABLE_METADATA_KEY, this)} SET ${updateColumns} ${updateConditions}`;
+    // const query = DB.driver.getUpdateQuery(Reflect.getMetadata(TABLE_METADATA_KEY, this.constructor), columns, conditions)
     console.log(query)
     console.log(queryValues)
     // const result = await db.execute(query, Object.values(columns), queryValues)
     return 0;
   }
+
+  static async findAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions?: Record<string, unknown>, limit?: number, offset?: number): Promise<T[]> {
+
+    const query = DB.driver.getSelectQuery(Reflect.getMetadata(TABLE_METADATA_KEY, this), ["*"], conditions, limit, offset);
+    const result = await DB.driver.execute(query);
+    return [];
+  }
+
+  static async findOne<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T , conditions: Partial<I>): Promise<T | null> {
+    const result = await (this as any).findAll(conditions)
+    return result.length > 0 ? result[0] : null;
+    // console.log(query);
+    // const result = await db.execute(query, Object.values(conditions));
+  }
+  
+  static async findById<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, id: number): Promise<T | null> {
+    const result = await (this as any).findOne({ id })
+    return result;
+    // const result = await db.execute(query, [id]);
+    // const instance = new this(result[0]);
+    // return instance;
+  } 
+
   
 }
