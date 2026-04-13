@@ -1,5 +1,5 @@
-import { BaseEntity, type IBaseEntity } from "./bases.entity.js";
-import { Table } from "./table.decorator.js";
+import { BaseEntity, type IBaseEntity } from "../core/bases.entity.js";
+import { Table } from "../core/table.decorator.js";
 
 export interface IEmployee extends IBaseEntity {
   name: string;
