@@ -35,7 +35,7 @@ export class MySqlDriver implements IDatabaseDriver  {
     }
   }
   execute(query: string, params?: any[]): Promise<any> {
-    console.log(`[SIMULATING]: Executing query...\n${query}\n${params}`);
+    console.log(`[SIMULATING]: Executing query...\n${query}\n\n${params}`);
     return Promise.resolve([]);
   }
 

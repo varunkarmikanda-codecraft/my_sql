@@ -1,4 +1,4 @@
-import { getColumns } from "./core/column.decorator.js";
+import { getColumnSqlName } from "./core/column.decorator.js";
 import { DB } from "./core/db.js";
 import { MySqlDriver } from "./drivers/mysql.driver.js";
 import { Employee, type IEmployee } from "./entities/employee.entity.js";
@@ -6,38 +6,44 @@ import { User, type IUser } from "./entities/user.entity.js";
 
 DB.setDriver(new MySqlDriver())
 
-async function testConnection() {
-  const driver = new MySqlDriver();
-  DB.setDriver(driver);
+// async function testConnection() {
+//   const driver = new MySqlDriver();
+//   DB.setDriver(driver);
 
-  try {
-    console.log("Testing connection...");
-    await DB.driver.connect();
+//   try {
+//     console.log("Testing connection...");
+//     await DB.driver.connect();
     
-    await DB.driver.disconnect();
-    console.log("All tests passed!");
-  } catch (error) {
-    console.error("Test failed:", error);
-  }
-}
+//     await DB.driver.disconnect();
+//     console.log("All tests passed!");
+//   } catch (error) {
+//     console.error("Test failed:", error);
+//   }
+// }
 
-testConnection();
+// testConnection();
 
-// const user: IUser = {
-//   id: 123,
-//   name: "Varun",
-//   address: "123 Docker Lane, Container City",
-//   dob: new Date("1995-05-20"),
-//   email: "varun@example.com",
-//   createdAt: new Date("2026-01-01T10:00:00Z"),
-//   createdBy: 123,
-//   updatedAt: new Date("2026-04-10T12:00:00Z"),
-//   updatedBy: 123
-// };
+const user: IUser = {
+  id: 123,
+  name: "Varun",
+  address: "123 Docker Lane, Container City",
+  dob: new Date("1995-05-20"),
+  email: "varun@example.com",
+  createdAt: new Date("2026-01-01T10:00:00Z"),
+  createdBy: 123,
+  updatedAt: new Date("2026-04-10T12:00:00Z"),
+  updatedBy: 123
+};
 
-// const newUser = new User(user);
-// console.log(getColumns(newUser));
-// console.log(newUser.save());
+const newUser = new User(user);
+
+// const properties = Object.keys(newUser);
+// properties.forEach((prop) => {
+//   const mapping = getColumnSqlName(Object.getPrototypeOf(newUser), prop);
+//   console.log(`${mapping.propertyName} -> ${mapping.dbColumnName}`);
+// });
+
+console.log(newUser.save());
 // User.findById(123)
 // console.log()
 // console.log(await User.findAll())

@@ -1,4 +1,4 @@
-import { Column } from "./column.decorator.js";
+import { Column, getColumnSqlName } from "./column.decorator.js";
 import { DB } from "./db.js";
 import { TABLE_METADATA_KEY } from "./table.decorator.js";
 
@@ -37,9 +37,14 @@ export abstract class BaseEntity implements IBaseEntity {
   }
 
   async save(): Promise<void> {
+    const ctor = this.constructor;
+    const proto = Object.getPrototypeOf(this);
     const keys = Object.keys(this);
-    const query = DB.driver.getInsertQuery(Reflect.getMetadata(TABLE_METADATA_KEY, this.constructor), keys)
-    await DB.driver.execute(query, Object.values(this));
+    const columnMetaData = keys.map(key => getColumnSqlName(proto, key)).filter(metadata => metadata.dbColumnName);
+    const values = columnMetaData.map(column => (this as any)[column.propertyName])
+    const columns = columnMetaData.map(column => column.dbColumnName)
+    const query = DB.driver.getInsertQuery(Reflect.getMetadata(TABLE_METADATA_KEY, ctor), columns)
+    await DB.driver.execute(query, values);
   }
 
   static async findById<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, id: number): Promise<T | null> {
