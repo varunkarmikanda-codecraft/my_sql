@@ -31,3 +31,8 @@
   - [X] a single update query generator that takes the target columns(the fields to be updated and its new value) 
   - [X] optional condition params to update only fields that matches the condition 
   - [X] optional limit parameter to limit the number of rows to be updated
+
+- [X] Column decorator
+- [X] Implement the necessary drivers (MySQL / Postgre SQL)
+- [ ] whitelisted properties from the entry
+- [ ] Returns proper type for the execute query
