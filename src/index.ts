@@ -4,7 +4,7 @@ import { MySqlDriver } from "./drivers/mysql.driver.js";
 import { Employee, type IEmployee } from "./entities/employee.entity.js";
 import { User, type IUser } from "./entities/user.entity.js";
 
-DB.setDriver(new MySqlDriver())
+DB.setDriver(new MySqlDriver("MySQL"))
 
 // async function testConnection() {
 //   const driver = new MySqlDriver();
@@ -44,32 +44,30 @@ const newUser = new User(user);
 // });
 
 console.log(newUser.save());
-// User.findById(123)
-// console.log()
-// console.log(await User.findAll())
-// console.log(await User.findAll({ id: 1, createdAt: new Date(), updatedBy: 56 }))
-// console.log(await User.findAll({ id: 1, createdAt: new Date(), updatedBy: 56 }, 6, 7))
-// console.log(await User.findAll({} , undefined, 7))
-// console.log()
-// User.findOne({ id: 123 })
-// User.findOne({ id: 123, createdAt: new Date() })
-// console.log()
-// User.deleteById(67);
-// console.log()
-// User.deleteAll({name: "varun", id: 5});
-// User.deleteAll({ id: 1}, 5, 10);
-// User.deleteAll({ id: 1, createdAt: new Date(), updatedBy: 56 }, undefined, 7);
-// console.log()
-// User.deleteOne({ name: 'varun' })
-// User.deleteOne({ name: 'varun', id: 5 })
-// User.updateAll({ name: "var", updatedAt: new Date() })
-// User.updateAll({ name: "var", updatedAt: new Date() }, { id: 123})
-// User.updateAll({ name: "var", updatedAt: new Date() }, { name: "varun" })
-// User.updateAll({ name: "var", updatedAt: new Date() }, {})
-// User.updateAll({ name: "var", updatedAt: new Date() }, { id: 123 }) 
-// User.updateById(1, { name: "var", updatedAt: new Date() }) 
-// User.count()
-// User.count({ name: "varun"})
+User.findById(123)
+
+User.findAll()
+User.findAll({ id: 1, createdAt: new Date(), updatedBy: 56 })
+User.findAll({ id: 1, createdAt: new Date(), updatedBy: 56 }, 6, 7)
+User.findAll({} , undefined, 7)
+
+User.findOne({ id: 123 })
+User.findOne({ id: 123, createdAt: new Date() })
+
+User.deleteById(67);
+User.deleteAll({name: "varun", id: 5});
+User.deleteAll({ id: 1}, 5, 10);
+User.deleteAll({ id: 1, createdAt: new Date(), updatedBy: 56 }, undefined, 7);
+User.deleteOne({ name: 'varun' })
+User.deleteOne({ name: 'varun', id: 5 })
+
+User.updateAll({ name: "var", updatedAt: new Date() }, { id: 123})
+User.updateAll({ name: "var", updatedAt: new Date() }, { name: "varun" })
+User.updateAll({ name: "var", updatedAt: new Date() }, {})
+User.updateAll({ name: "var", updatedAt: new Date() }, { id: 123 }) 
+User.updateById(1, { name: "var", updatedAt: new Date() }) 
+
+User.count({ name: "varun"})
 
 // console.log()
 
