@@ -9,14 +9,14 @@ export interface IUser extends IBaseEntity {
   email: string;
 }
 
-@Table('user')
+@Table()
 export class User extends BaseEntity implements IUser {
 
   @Column()
   name: string;
   @Column()
   address: string;
-  @Column()
+  @Column("date_of_birth")
   dob: Date;
   @Column()
   email: string;
