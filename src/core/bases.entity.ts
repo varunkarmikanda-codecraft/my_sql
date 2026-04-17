@@ -1,4 +1,4 @@
-import { Column, getColumnSqlName } from "./column.decorator.js";
+import { Column, COLUMN_METADATA_KEY, getColumnSqlName } from "./column.decorator.js";
 import { DB } from "./db.js";
 import { TABLE_METADATA_KEY } from "./table.decorator.js";
 
@@ -40,6 +40,9 @@ export abstract class BaseEntity implements IBaseEntity {
     const ctor = this.constructor;
     const proto = Object.getPrototypeOf(this);
     const keys = Object.keys(this);
+    // const x = this.prototype
+    console.log("constructor:", ctor)
+    console.log("prototype: ", proto)
     const columnMetaData = keys.map(key => getColumnSqlName(proto, key)).filter(metadata => metadata.dbColumnName);
     const values = columnMetaData.map(column => (this as any)[column.propertyName])
     const columns = columnMetaData.map(column => column.dbColumnName)
@@ -53,6 +56,19 @@ export abstract class BaseEntity implements IBaseEntity {
   }
 
   static async findAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions?: Record<string, unknown>, limit?: number, offset?: number): Promise<T[]> {
+
+    const proto = this.prototype;
+    // console.log("prototype: ",proto)
+
+    if(conditions ) {
+      const x = Object.entries(conditions).map(([propertyName, value]) => {
+        const meta = Reflect.getMetadata(COLUMN_METADATA_KEY, proto, propertyName)
+        console.log(meta)
+      })
+      // console.log(x)
+    }
+
+    
 
     const query = DB.driver.getSelectQuery(Reflect.getMetadata(TABLE_METADATA_KEY, this), ["*"], conditions, limit, offset);
     const result = await DB.driver.execute(query);
@@ -71,7 +87,7 @@ export abstract class BaseEntity implements IBaseEntity {
 
   static async deleteAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions: Record<string, unknown>, limit?: number, offset?: number): Promise<number> {
     const query = DB.driver.getDeleteQuery(Reflect.getMetadata(TABLE_METADATA_KEY, this), conditions, limit, offset);
-    const result = await DB.driver.execute(query);
+    // const result = await DB.driver.execute(query, values);
     // return result.affectedRows;
     return 0
   }
@@ -96,7 +112,7 @@ export abstract class BaseEntity implements IBaseEntity {
 
   static async count<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions?: Record<string, unknown>): Promise<number> {
     const query = DB.driver.getCountQuery(Reflect.getMetadata(TABLE_METADATA_KEY, this), conditions);
-    const result = await DB.driver.execute(query);
+    // const result = await DB.driver.execute(query, values);
     // return result[0].count;
     return 0;
   }
