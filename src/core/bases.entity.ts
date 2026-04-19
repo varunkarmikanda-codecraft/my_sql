@@ -61,7 +61,7 @@ export abstract class BaseEntity implements IBaseEntity {
     const columnMetaData = Object.keys(this).filter(key => Reflect.hasMetadata(COLUMN_METADATA_KEY, proto, key)).filter(key => (this as any)[key] !== undefined).map(key => getColumnSqlName(proto, key))
     const values = columnMetaData.map(column => (this as any)[column.propertyName])
     const columns = columnMetaData.map(column => column.dbColumnName)
-    const query = DB.driver.getUpsertQuery(this.getTableName(), columns);
+    const query = DB.driver.getUpsertQuery(this.getTableName(), columns, ["id"]);
     await DB.driver.execute(query, values);
   }
 
@@ -105,7 +105,8 @@ export abstract class BaseEntity implements IBaseEntity {
     const values = Object.values(normalizedConditions);
     const query = DB.driver.getDeleteQuery(BaseEntity.getTableName(this), normalizedConditions, limit, offset) as string;
     const result = await DB.driver.execute(query, values);
-    return result.affectedRows;
+    // return result.affectedRows;
+    return 0
   }
 
   static async deleteOne<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions: Partial<I>): Promise<boolean> {

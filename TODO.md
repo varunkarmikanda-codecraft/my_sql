@@ -34,5 +34,9 @@
 
 - [X] Column decorator
 - [X] Implement the necessary drivers (MySQL / Postgre SQL)
-- [ ] whitelisted properties from the entry
-- [ ] Returns proper type for the execute query
+- [X] whitelisted properties from the entry
+- [X] Returns proper type for the execute query
+
+
+- [ ] Postgres
+  - [ ] execute method to give apropriate results based on the query 

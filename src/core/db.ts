@@ -5,7 +5,7 @@ export interface IDatabaseDriver {
 
   getPlaceholderPrefix(): string ;
   getInsertQuery(tableName: string, columns: string[]): string;
-  getUpsertQuery(tableName: string, columns: string[]): string;
+  getUpsertQuery(tableName: string, columns: string[], conflictColums?: string[]): string;
   getUpdateQuery(tableName: string, columns: string[], conditions: Record<string, unknown>): string;
   getDeleteQuery(tableName: string, conditions: Record<string, unknown>, limit?: number, offset?: number): string;
   getSelectQuery(tableName: string, columns: string[], conditions?: Record<string, unknown>, limit?: number, offset?: number): string;
