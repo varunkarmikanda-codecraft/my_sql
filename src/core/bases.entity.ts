@@ -105,8 +105,7 @@ export abstract class BaseEntity implements IBaseEntity {
     const values = Object.values(normalizedConditions);
     const query = DB.driver.getDeleteQuery(BaseEntity.getTableName(this), normalizedConditions, limit, offset) as string;
     const result = await DB.driver.execute(query, values);
-    // return result.affectedRows;
-    return 0
+    return result.affectedRows;
   }
 
   static async deleteOne<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions: Partial<I>): Promise<boolean> {

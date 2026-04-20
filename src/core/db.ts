@@ -1,3 +1,10 @@
+export interface DatabaseDriverResult {
+  rows?: Record<string, unknown>[],
+  affectedRows: number,
+  insertedId?: number,
+  info?: string
+}
+
 export interface IDatabaseDriver {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
@@ -5,7 +12,7 @@ export interface IDatabaseDriver {
 
   getPlaceholderPrefix(): string ;
   getInsertQuery(tableName: string, columns: string[]): string;
-  getUpsertQuery(tableName: string, columns: string[], conflictColums?: string[]): string;
+  getUpsertQuery(tableName: string, columns: string[], conflictColumns?: string[]): string;
   getUpdateQuery(tableName: string, columns: string[], conditions: Record<string, unknown>): string;
   getDeleteQuery(tableName: string, conditions: Record<string, unknown>, limit?: number, offset?: number): string;
   getSelectQuery(tableName: string, columns: string[], conditions?: Record<string, unknown>, limit?: number, offset?: number): string;

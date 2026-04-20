@@ -1,14 +1,7 @@
 import mysql from "mysql2/promise"
 import type { Connection, ConnectionOptions } from "mysql2/promise";
-import type { IDatabaseDriver } from "../core/db.js";
+import type { DatabaseDriverResult, IDatabaseDriver } from "../core/db.js";
 import { createConnection } from "mysql2/promise";
-
-interface MySqlDriverResult {
-  rows?: Record<string, unknown>[],
-  affectedRows: number,
-  insertId?: number,
-  info?: string
-}
 
 export class MySqlDriver implements IDatabaseDriver  {
 
@@ -44,25 +37,25 @@ export class MySqlDriver implements IDatabaseDriver  {
     this.connection = null;
   }
 
-  async execute(query: string, params?: any[]): Promise<MySqlDriverResult> {
+  async execute(query: string, params?: any[]): Promise<DatabaseDriverResult> {
     if(!this.connection) throw new Error("Not connected to the database");
 
     const [result] = await this.connection.execute(query, params);
 
     if(Array.isArray(result)) {
-      const dbResult: MySqlDriverResult = {
+      const dbResult: DatabaseDriverResult = {
         rows: result as Record<string, unknown>[],
         affectedRows: 0
       }
       return dbResult
     }
     
-    const dbResult: MySqlDriverResult = {
+    const dbResult: DatabaseDriverResult = {
       affectedRows: result.affectedRows
     }
 
     if(result.insertId > 0) {
-      dbResult.insertId = result.insertId;
+      dbResult.insertedId = result.insertId;
     }
 
     if("info" in result && result.info.trim() !== "") {

@@ -40,3 +40,15 @@
 
 - [ ] Postgres
   - [ ] execute method to give apropriate results based on the query 
+  - [ ] update the delete query as the delete in the postgres by default doesn't support limit so(1 or 2)
+    1. Support subquery -> Basically supply the condition as the subquery 
+    2. Supports the duplicate rows -> Use the ctid approach to delete one instance of the duplicate row  
+
+- [ ] MySQL
+  - [ ] Support returning mechanism that returns the id/the inserted row
+  - [ ] or then method INSERED_ID method
+  - [ ] Updation or the inertion must spcifically tell what it did insert or update 
+
+- [ ] Explore mysql dump cli
+
+- [ ] Data backup https://github.com/databasus/databasus

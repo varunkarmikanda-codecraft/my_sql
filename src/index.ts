@@ -13,10 +13,10 @@ import { User, type IUser } from "./entities/user.entity.js";
 
 const connectionConfig = {
   host: "localhost",
-  port: 5433,
+  port: 5432,
   database: "my_postgres_db",
   user: "postgres_user",
-  password: "postgres_password"
+  password: "postgres_password",
 };
 
 // DB.setDriver(new MySqlDriver(connectionConfig));
@@ -30,11 +30,11 @@ const user: IUser = {
   createdAt: new Date("2026-01-01T10:00:00Z"),
   createdBy: 123,
   updatedAt: new Date("2026-04-10T12:00:00Z"),
-  updatedBy: 123
+  updatedBy: 123,
 };
 
 const main = async () => {
-await DB.driver.connect();
+  await DB.driver.connect();
 
   try {
     const newUser = new User(user);
@@ -62,7 +62,6 @@ await DB.driver.connect();
   } finally {
     await DB.driver.disconnect();
   }
-
-}
+};
 
 main();
