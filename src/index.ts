@@ -13,7 +13,7 @@ import { User, type IUser } from "./entities/user.entity.js";
 
 const connectionConfig = {
   host: "localhost",
-  port: 5433,
+  port: 5432,
   database: "my_postgres_db",
   user: "postgres_user",
   password: "postgres_password"
@@ -33,16 +33,34 @@ const user: IUser = {
   updatedBy: 123
 };
 
+const ensureSchema = async (): Promise<void> => {
+  await DB.driver.execute(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      address TEXT NOT NULL,
+      date_of_birth TIMESTAMP NOT NULL,
+      email VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP NOT NULL,
+      created_by INTEGER NOT NULL,
+      updated_at TIMESTAMP NOT NULL,
+      updated_by INTEGER NOT NULL
+    )
+  `);
+};
+
 const main = async () => {
 await DB.driver.connect();
 
   try {
+    await ensureSchema();
+
     const newUser = new User(user);
     await newUser.save();
     console.log("saved");
 
-    // const f1 = await User.findAll();
-    // console.log(JSON.stringify(f1, null, 2))
+    const f1 = await User.findAll();
+    console.log(JSON.stringify(f1, null, 2))
     // const f2 = await User.findAll({ name: "Varun" }, undefined, 4);
     // console.log(JSON.stringify(f2, null, 2))
     // const f3 = await User.findOne({ email: "varun@example.com" });

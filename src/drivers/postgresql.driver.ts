@@ -1,13 +1,6 @@
-import type { IDatabaseDriver } from "../core/db.js";
+import type { DatabaseDriverResult, IDatabaseDriver } from "../core/db.js";
 import type { ClientConfig } from "pg";
 import { Client } from "pg";
-
-interface PostgreSqlDriverResult {
-  rows?: Record<string, unknown>[],
-  affectedRows: number,
-  insertId?: number,
-  info?: string
-}
 
 export class PostgreSqlDriver implements IDatabaseDriver {
 
@@ -52,15 +45,28 @@ export class PostgreSqlDriver implements IDatabaseDriver {
     this.connection = null;
   }
 
-  async execute(query: string, params?: any[]): Promise<any> {
+  async execute(query: string, params?: any[]): Promise<DatabaseDriverResult> {
     if(!this.connection) throw new Error("Not connected to the database");
 
     const result = await this.connection.query(query, params);
-    console.log(result)
 
-    /* IN PROGRESS... */
+    console.log(`[QUERY]: ${query}\n[PARAM]: ${params}`)
 
-    return result;
+    if(result.rows.length > 0) {
+      const dbResult: DatabaseDriverResult = {
+        rows: result.rows,
+        affectedRows: 0
+      }
+      console.log(dbResult)
+      return dbResult;
+    }
+
+    const dbResult: DatabaseDriverResult = {
+      affectedRows: result.rowCount ?? 0
+    }
+
+    console.log(dbResult)
+    return dbResult;
   }
 
   getPlaceholderPrefix(): string {
@@ -72,18 +78,27 @@ export class PostgreSqlDriver implements IDatabaseDriver {
   }
 
   getInsertQuery(tableName: string, columns: string[]): string {
-    const placeholders = columns.map((k, i) => this.getNumberedPlaceholder(i + 1)).join(', ')
-    return `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders})  RETURNING id`
+    const placeholders = columns.map((_, i) => this.getNumberedPlaceholder(i + 1)).join(', ')
+    return `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING id`
   }
 
-  getUpsertQuery(tableName: string, columns: string[], conflictColums: string[]): string {
-    const placeholders = columns.map((k, i) => this.getNumberedPlaceholder(i + 1)).join(', ')
-    const conflictColumns = conflictColums.join(', ')
-    const updateColumns = columns.filter(column => !conflictColums.includes(column));
+  getUpsertQuery(tableName: string, columns: string[], conflictColumns?: string[]): string {
+    const placeholders = columns.map((_, i) => this.getNumberedPlaceholder(i + 1)).join(', ');
+    const resolvedConflictColumns = conflictColumns?.filter(Boolean) ?? [];
+
+    if (resolvedConflictColumns.length === 0) {
+      return `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING id`;
+    }
+
+    const conflictedColumns = resolvedConflictColumns.join(', ');
+    const updateColumns = columns.filter(
+      column => !resolvedConflictColumns.includes(column) && column !== 'created_at'
+    );
     const updateClause = updateColumns.length <= 0
       ? `DO NOTHING`
       : `DO UPDATE SET ${updateColumns.map(column => `${column} = EXCLUDED.${column}`).join(', ')}`;
-    return `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders}) ON CONFLICT (${conflictColumns}) ${updateClause}`
+
+    return `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders}) ON CONFLICT (${conflictedColumns}) ${updateClause} RETURNING id`;
   }
 
   getUpdateQuery(tableName: string, columns: string[], conditions: Record<string, unknown>): string {
@@ -92,7 +107,20 @@ export class PostgreSqlDriver implements IDatabaseDriver {
   }
 
   getDeleteQuery(tableName: string, conditions: Record<string, unknown>, limit?: number, offset?: number): string {
-    return `DELETE FROM ${tableName}${this.getWhereClause(conditions)}${this.getLimitOffset(limit, offset)}`;
+     const whereClause = this.getWhereClause(conditions);
+
+    if(limit === undefined || offset === undefined) {
+      `DELETE FROM ${tableName}${whereClause}`
+    }
+
+    const scopedSelect = [`SELECT ctid FROM ${tableName}${whereClause}`];
+    if(limit !== undefined) {
+      scopedSelect.push(`LIMIT ${limit}`);
+    }
+    if(offset !== undefined) [
+      scopedSelect.push(`OFFSET ${offset}`)
+    ]
+    return `DELETE FROM ${tableName} WHERE ctid IN (${scopedSelect.join(' ')})`;
   }
 
   getSelectQuery(tableName: string, columns: string[], conditions?: Record<string, unknown>, limit?: number, offset?: number): string {

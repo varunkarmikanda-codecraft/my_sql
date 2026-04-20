@@ -1,7 +1,7 @@
 ## COMMIT - 1: enhance the column decorator and add default table name if the table name is not specified in the table decorator
 
 
- - Enhanced the colum decorator to take an optional parameter that takes the property name as its default values if not given as a paramenter in teh decorator
+- Enhanced the colum decorator to take an optional parameter that takes the property name as its default values if not given as a paramenter in teh decorator
 
 - Created an helper function getColumnSqlName that returns a object with the database name(the name given in the decorator/fefault property name) and roperty name
 
@@ -32,4 +32,4 @@
 
 ## COMMIT - 2: Postgres
 
-- Implemented the postgress driver
+  - Implemented the postgress driver

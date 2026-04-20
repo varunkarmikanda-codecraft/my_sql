@@ -53,6 +53,13 @@ export abstract class BaseEntity implements IBaseEntity {
     }
     return mapAndWhiteList;
   }
+
+  private getUpsertConflictColumns(columns: string[]): string[] {
+    if (columns.includes("id")) return ["id"];
+    if (columns.includes("email")) return ["email"];
+    
+    return [];
+  }
   
 
   async save(): Promise<void> {
@@ -61,7 +68,8 @@ export abstract class BaseEntity implements IBaseEntity {
     const columnMetaData = Object.keys(this).filter(key => Reflect.hasMetadata(COLUMN_METADATA_KEY, proto, key)).filter(key => (this as any)[key] !== undefined).map(key => getColumnSqlName(proto, key))
     const values = columnMetaData.map(column => (this as any)[column.propertyName])
     const columns = columnMetaData.map(column => column.dbColumnName)
-    const query = DB.driver.getUpsertQuery(this.getTableName(), columns, ["id"]);
+    const conflictColumns = this.getUpsertConflictColumns(columns);
+    const query = DB.driver.getUpsertQuery(this.getTableName(), columns, conflictColumns);
     await DB.driver.execute(query, values);
   }
 
@@ -76,8 +84,9 @@ export abstract class BaseEntity implements IBaseEntity {
     const values = Object.values(normalizedConditions);
     const query = DB.driver.getSelectQuery(BaseEntity.getTableName(this), ["*"], normalizedConditions, limit, offset) as string;
     const result = await DB.driver.execute(query, values);
+    const rows = result.rows ?? [];
 
-    return result.rows.map((row: Record<string, unknown>) => {
+    return rows.map((row: Record<string, unknown>) => {
       const tempEntity = new this(row as I);
 
       const mapped = Object.keys(tempEntity).reduce<Record<string, unknown>>((acc, key) => {
@@ -105,8 +114,7 @@ export abstract class BaseEntity implements IBaseEntity {
     const values = Object.values(normalizedConditions);
     const query = DB.driver.getDeleteQuery(BaseEntity.getTableName(this), normalizedConditions, limit, offset) as string;
     const result = await DB.driver.execute(query, values);
-    // return result.affectedRows;
-    return 0
+    return result.affectedRows;
   }
 
   static async deleteOne<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions: Partial<I>): Promise<boolean> {
@@ -135,7 +143,8 @@ export abstract class BaseEntity implements IBaseEntity {
     const values = Object.values(normalizedConditions);
     const query = DB.driver.getCountQuery(BaseEntity.getTableName(this), normalizedConditions) as string;
     const result = await DB.driver.execute(query, values);
-    return result.rows[0].count;
+    const count = result.rows?.[0]?.count;
+    return typeof count === "number" ? count : Number(count ?? 0);
   }
   
 }

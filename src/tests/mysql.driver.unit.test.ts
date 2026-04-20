@@ -25,6 +25,11 @@ test("query helpers build expected SQL", () => {
     driver.getCountQuery("users", { name: "Varun" }),
     "SELECT COUNT(*) AS count FROM users WHERE name = ?"
   );
+
+  assert.equal(
+    driver.getUpsertQuery("users", ["id", "name", "created_at", "updated_at"]),
+    "INSERT INTO users (id, name, created_at, updated_at) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), updated_at = VALUES(updated_at)"
+  );
 });
 
 test("execute throws when not connected", async () => {
