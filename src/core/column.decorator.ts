@@ -2,20 +2,30 @@ import type { BaseEntity, IBaseEntity } from "./bases.entity.js";
 
 export const COLUMN_METADATA_KEY = Symbol('column');
 
-export const Column = (column?: string) => {
-  return (target: IBaseEntity, propertyKey: string) => {
-    const columnName = column || propertyKey;
-    Reflect.defineMetadata(COLUMN_METADATA_KEY, columnName, target, propertyKey)
+export interface ColumnOptions {
+  name?: string;
+}
+
+const normalizeOptions = (options?: string | ColumnOptions): ColumnOptions => {
+  if(options === undefined) return {};
+  if(typeof options === "string") return { name: options };
+  return options;
+}
+
+export const Column = (options?: string | ColumnOptions) => {
+  const resolved = normalizeOptions(options);
+  return (target: object, propertyKey: string | symbol): void => {
+    Reflect.defineMetadata(COLUMN_METADATA_KEY, resolved, target, propertyKey);
   }
 }
 
-export const getColumns = (instance: BaseEntity): Map<string, string> => {
-  const columnMap = new Map<string, string>();
-  const properties = Object.keys(instance);
+interface ColumnMetaData {
+  dbColumnName: string;
+  propertyName: string;
+}
 
-  properties.forEach((prop) => {
-    const columName = Reflect.getMetadata(COLUMN_METADATA_KEY, instance, prop);
-    if(columName) columnMap.set(prop, columName);
-  });
-  return columnMap;
+export const getColumnSqlName = (prototype: object, propertyKey: string): ColumnMetaData => {
+  const meta = Reflect.getMetadata(COLUMN_METADATA_KEY, prototype, propertyKey) as ColumnOptions | undefined;
+
+  return { dbColumnName: meta?.name ?? propertyKey, propertyName: propertyKey};
 }

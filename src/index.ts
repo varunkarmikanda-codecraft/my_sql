@@ -1,89 +1,86 @@
-import { getColumns } from "./core/column.decorator.js";
 import { DB } from "./core/db.js";
 import { MySqlDriver } from "./drivers/mysql.driver.js";
-import { Employee, type IEmployee } from "./entities/employee.entity.js";
+import { PostgreSqlDriver } from "./drivers/postgresql.driver.js";
 import { User, type IUser } from "./entities/user.entity.js";
 
-DB.setDriver(new MySqlDriver())
+// const connectionConfig = {
+//   host: "localhost",
+//   port: 3306,
+//   database: "my_sql",
+//   user: "groot",
+//   password: "groot123"
+// };
 
-async function testConnection() {
-  const driver = new MySqlDriver();
-  DB.setDriver(driver);
+const connectionConfig = {
+  host: "localhost",
+  port: 5432,
+  database: "my_postgres_db",
+  user: "postgres_user",
+  password: "postgres_password"
+};
+
+// DB.setDriver(new MySqlDriver(connectionConfig));
+DB.setDriver(new PostgreSqlDriver(connectionConfig));
+
+const user: IUser = {
+  name: "Varun",
+  address: "123 Docker Lane, Container City",
+  dob: new Date("1995-05-20"),
+  email: "varun@example.com",
+  createdAt: new Date("2026-01-01T10:00:00Z"),
+  createdBy: 123,
+  updatedAt: new Date("2026-04-10T12:00:00Z"),
+  updatedBy: 123
+};
+
+const ensureSchema = async (): Promise<void> => {
+  await DB.driver.execute(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(255) NOT NULL,
+      address TEXT NOT NULL,
+      date_of_birth TIMESTAMP NOT NULL,
+      email VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP NOT NULL,
+      created_by INTEGER NOT NULL,
+      updated_at TIMESTAMP NOT NULL,
+      updated_by INTEGER NOT NULL
+    )
+  `);
+};
+
+const main = async () => {
+await DB.driver.connect();
 
   try {
-    console.log("Testing connection...");
-    await DB.driver.connect();
-    
+    await ensureSchema();
+
+    const newUser = new User(user);
+    await newUser.save();
+    console.log("saved");
+
+    const f1 = await User.findAll();
+    console.log(JSON.stringify(f1, null, 2))
+    // const f2 = await User.findAll({ name: "Varun" }, undefined, 4);
+    // console.log(JSON.stringify(f2, null, 2))
+    // const f3 = await User.findOne({ email: "varun@example.com" });
+    // console.log(JSON.stringify(f3, null, 2))
+
+    // const f4 = await User.updateAll(
+    //   { address: "Updated address", updatedAt: new Date(), updatedBy: 123 },
+    //   { email: "varun@example.com" }
+    // );
+    // console.log(f4)
+
+    // const x = await User.count({ name: "Varun" });
+    // console.log(x)
+
+    // const y = await User.deleteOne({ email: "varun@example.com" });
+    // console.log(y)
+  } finally {
     await DB.driver.disconnect();
-    console.log("All tests passed!");
-  } catch (error) {
-    console.error("Test failed:", error);
   }
+
 }
 
-testConnection();
-
-// const user: IUser = {
-//   id: 123,
-//   name: "Varun",
-//   address: "123 Docker Lane, Container City",
-//   dob: new Date("1995-05-20"),
-//   email: "varun@example.com",
-//   createdAt: new Date("2026-01-01T10:00:00Z"),
-//   createdBy: 123,
-//   updatedAt: new Date("2026-04-10T12:00:00Z"),
-//   updatedBy: 123
-// };
-
-// const newUser = new User(user);
-// console.log(getColumns(newUser));
-// console.log(newUser.save());
-// User.findById(123)
-// console.log()
-// console.log(await User.findAll())
-// console.log(await User.findAll({ id: 1, createdAt: new Date(), updatedBy: 56 }))
-// console.log(await User.findAll({ id: 1, createdAt: new Date(), updatedBy: 56 }, 6, 7))
-// console.log(await User.findAll({} , undefined, 7))
-// console.log()
-// User.findOne({ id: 123 })
-// User.findOne({ id: 123, createdAt: new Date() })
-// console.log()
-// User.deleteById(67);
-// console.log()
-// User.deleteAll({name: "varun", id: 5});
-// User.deleteAll({ id: 1}, 5, 10);
-// User.deleteAll({ id: 1, createdAt: new Date(), updatedBy: 56 }, undefined, 7);
-// console.log()
-// User.deleteOne({ name: 'varun' })
-// User.deleteOne({ name: 'varun', id: 5 })
-// User.updateAll({ name: "var", updatedAt: new Date() })
-// User.updateAll({ name: "var", updatedAt: new Date() }, { id: 123})
-// User.updateAll({ name: "var", updatedAt: new Date() }, { name: "varun" })
-// User.updateAll({ name: "var", updatedAt: new Date() }, {})
-// User.updateAll({ name: "var", updatedAt: new Date() }, { id: 123 }) 
-// User.updateById(1, { name: "var", updatedAt: new Date() }) 
-// User.count()
-// User.count({ name: "varun"})
-
-// console.log()
-
-// const employee: IEmployee = {
-//   id: 123,
-//   name: "Varun",
-//   position: "dev",
-//   department: 'backend',
-//   salary: 9999999,
-//   createdAt: new Date("2026-01-01T10:00:00Z"),
-//   createdBy: 123,
-//   updatedAt: new Date("2026-04-10T12:00:00Z"),
-//   updatedBy: 123
-// };
-
-// const newEmployee = new Employee(employee);
-// newEmployee.save();
-// Employee.findById(123)
-// Employee.findAll()
-// Employee.findOne({ name: 'john' })
-// Employee.deleteById(26);
-// Employee.deleteAll();
-// Employee.deleteOne({ id: 6 })
+main();

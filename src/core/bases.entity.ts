@@ -1,4 +1,4 @@
-import { Column } from "./column.decorator.js";
+import { Column, COLUMN_METADATA_KEY, getColumnSqlName } from "./column.decorator.js";
 import { DB } from "./db.js";
 import { TABLE_METADATA_KEY } from "./table.decorator.js";
 
@@ -32,14 +32,45 @@ export abstract class BaseEntity implements IBaseEntity {
     this.updatedBy = entity.updatedBy;
   }
 
-  static getTableName(): string {
-    return Reflect.getMetadata(TABLE_METADATA_KEY, this);
+  private getTableName(): string {
+    const ctor = this.constructor;
+    return Reflect.getMetadata(TABLE_METADATA_KEY, ctor)
   }
 
+  private static getTableName(ctor: Function): string {
+    return Reflect.getMetadata(TABLE_METADATA_KEY, ctor);
+  }
+
+  private static whitelistAndMapDbColums(proto: object, conditions?:Record<string, unknown>): Record<string, unknown> {
+    const mapAndWhiteList: Record<string, unknown> = {}
+    if(conditions && Object.keys(conditions).length > 0){
+      Object.entries(conditions).map(([property, value]) => {
+        if(Reflect.getMetadata(COLUMN_METADATA_KEY, proto, property)) {
+          const { dbColumnName } = getColumnSqlName(proto, property);
+          mapAndWhiteList[dbColumnName] = value;
+        }
+      })
+    }
+    return mapAndWhiteList;
+  }
+
+  private getUpsertConflictColumns(columns: string[]): string[] {
+    if (columns.includes("id")) return ["id"];
+    if (columns.includes("email")) return ["email"];
+    
+    return [];
+  }
+  
+
   async save(): Promise<void> {
-    const keys = Object.keys(this);
-    const query = DB.driver.getInsertQuery(Reflect.getMetadata(TABLE_METADATA_KEY, this.constructor), keys)
-    await DB.driver.execute(query, Object.values(this));
+    const ctor = this.constructor;
+    const proto = Object.getPrototypeOf(this);
+    const columnMetaData = Object.keys(this).filter(key => Reflect.hasMetadata(COLUMN_METADATA_KEY, proto, key)).filter(key => (this as any)[key] !== undefined).map(key => getColumnSqlName(proto, key))
+    const values = columnMetaData.map(column => (this as any)[column.propertyName])
+    const columns = columnMetaData.map(column => column.dbColumnName)
+    const conflictColumns = this.getUpsertConflictColumns(columns);
+    const query = DB.driver.getUpsertQuery(this.getTableName(), columns, conflictColumns);
+    await DB.driver.execute(query, values);
   }
 
   static async findById<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, id: number): Promise<T | null> {
@@ -47,11 +78,25 @@ export abstract class BaseEntity implements IBaseEntity {
     return result;
   }
 
-  static async findAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions?: Record<string, unknown>, limit?: number, offset?: number): Promise<T[]> {
+  static async findAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions?: Partial<I>, limit?: number, offset?: number): Promise<T[]> {
+    const proto = this.prototype;
+    const normalizedConditions = BaseEntity.whitelistAndMapDbColums(proto, conditions);
+    const values = Object.values(normalizedConditions);
+    const query = DB.driver.getSelectQuery(BaseEntity.getTableName(this), ["*"], normalizedConditions, limit, offset) as string;
+    const result = await DB.driver.execute(query, values);
+    const rows = result.rows ?? [];
 
-    const query = DB.driver.getSelectQuery(Reflect.getMetadata(TABLE_METADATA_KEY, this), ["*"], conditions, limit, offset);
-    const result = await DB.driver.execute(query);
-    return result.map((row: any) => new this(row))
+    return rows.map((row: Record<string, unknown>) => {
+      const tempEntity = new this(row as I);
+
+      const mapped = Object.keys(tempEntity).reduce<Record<string, unknown>>((acc, key) => {
+        const { dbColumnName } = getColumnSqlName(proto, key);
+        acc[key] = (dbColumnName in row ? row[dbColumnName] : (tempEntity as Record<string, unknown>)[key]);
+        return acc;
+      }, {});
+
+      return new this(mapped as I);
+    })  
   }
 
   static async findOne<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T , conditions: Partial<I>): Promise<T | null> {
@@ -63,33 +108,43 @@ export abstract class BaseEntity implements IBaseEntity {
     return await (this as any).deleteOne({ id });
   }
 
-  static async deleteAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions: Record<string, unknown>, limit?: number, offset?: number): Promise<number> {
-    const query = DB.driver.getDeleteQuery(Reflect.getMetadata(TABLE_METADATA_KEY, this), conditions, limit, offset);
-    const result = await DB.driver.execute(query);
+  static async deleteAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions: Partial<I>, limit?: number, offset?: number): Promise<number> {
+    const proto = this.prototype;
+    const normalizedConditions = BaseEntity.whitelistAndMapDbColums(proto, conditions);
+    const values = Object.values(normalizedConditions);
+    const query = DB.driver.getDeleteQuery(BaseEntity.getTableName(this), normalizedConditions, limit, offset) as string;
+    const result = await DB.driver.execute(query, values);
     return result.affectedRows;
   }
 
-  static async deleteOne<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions: Record<string, unknown>): Promise<boolean> {
+  static async deleteOne<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions: Partial<I>): Promise<boolean> {
     const affectedRows = await (this as any).deleteAll(conditions, 1);
     return affectedRows > 0;
   }
 
-  static async updateAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, updates: Record<string, unknown>, conditions: Record<string, unknown>): Promise<number> {
-    const query = DB.driver.getUpdateQuery(Reflect.getMetadata(TABLE_METADATA_KEY, this), Object.keys(updates), conditions);
-    const params = [...Object.values(updates), ...Object.values(conditions)];
+  static async updateAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, updates: Partial<I>, conditions: Partial<I>): Promise<number> {
+    const proto = this.prototype;
+    const normalizedColums = BaseEntity.whitelistAndMapDbColums(proto, updates);
+    const normalizedConditions = BaseEntity.whitelistAndMapDbColums(proto, conditions);
+    const query = DB.driver.getUpdateQuery(BaseEntity.getTableName(this), Object.keys(normalizedColums), normalizedConditions) as string;
+    const params = [...Object.values(normalizedColums), ...Object.values(normalizedConditions)];
     const result = await DB.driver.execute(query, params);
     return result.affectedRows;
   }
 
-  static async updateById<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, id: number, updates: Record<string, unknown>): Promise<boolean> {
+  static async updateById<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, id: number, updates: Partial<I>): Promise<boolean> {
     const affectedRows = await (this as any).updateAll(updates, { id });
     return affectedRows > 0;
   }
 
-  static async count<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions?: Record<string, unknown>): Promise<number> {
-    const query = DB.driver.getCountQuery(Reflect.getMetadata(TABLE_METADATA_KEY, this), conditions);
-    const result = await DB.driver.execute(query);
-    return result[0].count;
+  static async count<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions?: Partial<I>): Promise<number> {
+    const proto = this.prototype;
+    const normalizedConditions = BaseEntity.whitelistAndMapDbColums(proto, conditions);
+    const values = Object.values(normalizedConditions);
+    const query = DB.driver.getCountQuery(BaseEntity.getTableName(this), normalizedConditions) as string;
+    const result = await DB.driver.execute(query, values);
+    const count = result.rows?.[0]?.count;
+    return typeof count === "number" ? count : Number(count ?? 0);
   }
   
 }
