@@ -1,3 +1,5 @@
+import type { Condition } from "./expression.js";
+
 export interface DatabaseDriverResult {
   rows?: Record<string, unknown>[],
   affectedRows: number,
@@ -5,18 +7,24 @@ export interface DatabaseDriverResult {
   info?: string
 }
 
+export interface QueryData {
+  sql: string;
+  params: unknown[];
+}
+
 export interface IDatabaseDriver {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
   execute(query: string, params?: any[]): Promise<DatabaseDriverResult>;
+  getConditionParams?(conditions?: Condition): unknown[];
 
   getPlaceholderPrefix(): string ;
-  getInsertQuery(tableName: string, columns: string[]): string;
-  getUpsertQuery(tableName: string, columns: string[], conflictColumns?: string[]): string;
-  getUpdateQuery(tableName: string, columns: string[], conditions: Record<string, unknown>): string;
-  getDeleteQuery(tableName: string, conditions: Record<string, unknown>, limit?: number, offset?: number): string;
-  getSelectQuery(tableName: string, columns: string[], conditions?: Record<string, unknown>, limit?: number, offset?: number): string;
-  getCountQuery(tableName: string, conditions?: Record<string, unknown>): string;
+  getInsertQuery(tableName: string, values: Record<string, unknown>): QueryData;
+  getUpsertQuery(tableName: string, values: Record<string, unknown>, conflictColumns?: string[]): QueryData;
+  getUpdateQuery(tableName: string, updates: Record<string, unknown>, conditions: Condition): QueryData;
+  getDeleteQuery(tableName: string, conditions: Condition, limit?: number, offset?: number): QueryData;
+  getSelectQuery(tableName: string, columns: string[], conditions?: Condition, limit?: number, offset?: number): QueryData;
+  getCountQuery(tableName: string, conditions?: Condition): QueryData;
 }
 
 export class DB {
