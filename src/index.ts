@@ -1,6 +1,6 @@
 import { DB } from "./core/db.js";
 import { MySqlDriver } from "./drivers/mysql.driver.js";
-import { PostgreSqlDriver } from "./drivers/postgresql.driver.js";
+// import { PostgreSqlDriver } from "./drivers/postgresql.driver.js";
 import { User, type IUser } from "./entities/user.entity.js";
 
 // const connectionConfig = {
@@ -19,8 +19,8 @@ const connectionConfig = {
   password: "postgres_password"
 };
 
-// DB.setDriver(new MySqlDriver(connectionConfig));
-DB.setDriver(new PostgreSqlDriver(connectionConfig));
+DB.setDriver(new MySqlDriver(connectionConfig));
+// DB.setDriver(new PostgreSqlDriver(connectionConfig));
 
 const user: IUser = {
   name: "Varun",

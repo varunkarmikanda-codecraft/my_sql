@@ -1,5 +1,6 @@
 import { Column, COLUMN_METADATA_KEY, getColumnSqlName } from "./column.decorator.js";
 import { DB } from "./db.js";
+import type { Condition, Expression } from "./expression.js";
 import { TABLE_METADATA_KEY } from "./table.decorator.js";
 
 export interface IBaseEntity {
@@ -41,17 +42,30 @@ export abstract class BaseEntity implements IBaseEntity {
     return Reflect.getMetadata(TABLE_METADATA_KEY, ctor);
   }
 
-  private static whitelistAndMapDbColums(proto: object, conditions?:Record<string, unknown>): Record<string, unknown> {
-    const mapAndWhiteList: Record<string, unknown> = {}
-    if(conditions && Object.keys(conditions).length > 0){
-      Object.entries(conditions).map(([property, value]) => {
-        if(Reflect.getMetadata(COLUMN_METADATA_KEY, proto, property)) {
+  private static whitelistAndMapDbColums(proto: object, conditions?: Condition): Condition {
+    const mapAndWhiteList: Condition = {};
+    if (conditions && Object.keys(conditions).length > 0) {
+      Object.entries(conditions).forEach(([property, expression]) => {
+        if (Reflect.getMetadata(COLUMN_METADATA_KEY, proto, property)) {
           const { dbColumnName } = getColumnSqlName(proto, property);
-          mapAndWhiteList[dbColumnName] = value;
+          mapAndWhiteList[dbColumnName] = expression;
         }
-      })
+      });
     }
     return mapAndWhiteList;
+  }
+
+  private static whitelistAndMapUpdateColumns(proto: object, updates?: Record<string, unknown>): Record<string, unknown> {
+    const mappedUpdates: Record<string, unknown> = {};
+    if (updates && Object.keys(updates).length > 0) {
+      Object.entries(updates).forEach(([property, value]) => {
+        if (Reflect.getMetadata(COLUMN_METADATA_KEY, proto, property)) {
+          const { dbColumnName } = getColumnSqlName(proto, property);
+          mappedUpdates[dbColumnName] = value;
+        }
+      });
+    }
+    return mappedUpdates;
   }
 
   private getUpsertConflictColumns(columns: string[]): string[] {
@@ -74,16 +88,16 @@ export abstract class BaseEntity implements IBaseEntity {
   }
 
   static async findById<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, id: number): Promise<T | null> {
-    const result = await (this as any).findOne({ id })
+    const result = await (this as any).findOne({ id: { op: "equal", value: id}});
     return result;
   }
 
-  static async findAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions?: Partial<I>, limit?: number, offset?: number): Promise<T[]> {
+  static async findAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions?: Condition, limit?: number, offset?: number): Promise<T[]> {
     const proto = this.prototype;
     const normalizedConditions = BaseEntity.whitelistAndMapDbColums(proto, conditions);
-    const values = Object.values(normalizedConditions);
     const query = DB.driver.getSelectQuery(BaseEntity.getTableName(this), ["*"], normalizedConditions, limit, offset) as string;
-    const result = await DB.driver.execute(query, values);
+    const conditionParams = DB.driver.getConditionParams?.(normalizedConditions) ?? [];
+    const result = await DB.driver.execute(query, conditionParams);
     const rows = result.rows ?? [];
 
     return rows.map((row: Record<string, unknown>) => {
@@ -99,50 +113,52 @@ export abstract class BaseEntity implements IBaseEntity {
     })  
   }
 
-  static async findOne<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T , conditions: Partial<I>): Promise<T | null> {
+  static async findOne<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T , conditions: Condition): Promise<T | null> {
     const result = await (this as any).findAll(conditions)
     return result.length > 0 ? result[0] : null;
   }
 
   static async deleteById<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, id: number): Promise<boolean> {
-    return await (this as any).deleteOne({ id });
+    return await (this as any).deleteOne({ id: { op: "equal", value: id}});
   }
 
-  static async deleteAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions: Partial<I>, limit?: number, offset?: number): Promise<number> {
+  static async deleteAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions: Condition, limit?: number, offset?: number): Promise<number> {
     const proto = this.prototype;
     const normalizedConditions = BaseEntity.whitelistAndMapDbColums(proto, conditions);
-    const values = Object.values(normalizedConditions);
     const query = DB.driver.getDeleteQuery(BaseEntity.getTableName(this), normalizedConditions, limit, offset) as string;
-    const result = await DB.driver.execute(query, values);
+    const conditionParams = DB.driver.getConditionParams?.(normalizedConditions) ?? [];
+    const result = await DB.driver.execute(query, conditionParams);
     return result.affectedRows;
   }
 
-  static async deleteOne<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions: Partial<I>): Promise<boolean> {
+  static async deleteOne<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions: Condition): Promise<boolean> {
     const affectedRows = await (this as any).deleteAll(conditions, 1);
     return affectedRows > 0;
   }
 
-  static async updateAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, updates: Partial<I>, conditions: Partial<I>): Promise<number> {
+  static async updateAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, updates: Record<string, unknown>, conditions: Condition): Promise<number> {
     const proto = this.prototype;
-    const normalizedColums = BaseEntity.whitelistAndMapDbColums(proto, updates);
+    const normalizedUpdates = BaseEntity.whitelistAndMapUpdateColumns(proto, updates);
     const normalizedConditions = BaseEntity.whitelistAndMapDbColums(proto, conditions);
-    const query = DB.driver.getUpdateQuery(BaseEntity.getTableName(this), Object.keys(normalizedColums), normalizedConditions) as string;
-    const params = [...Object.values(normalizedColums), ...Object.values(normalizedConditions)];
+    const query = DB.driver.getUpdateQuery(BaseEntity.getTableName(this), normalizedUpdates, normalizedConditions) as string;
+    const updateParams = Object.values(normalizedUpdates);
+    const conditionParams = DB.driver.getConditionParams?.(normalizedConditions) ?? [];
+    const params = [...updateParams, ...conditionParams];
     const result = await DB.driver.execute(query, params);
     return result.affectedRows;
   }
 
-  static async updateById<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, id: number, updates: Partial<I>): Promise<boolean> {
-    const affectedRows = await (this as any).updateAll(updates, { id });
+  static async updateById<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, id: number, updates: Record<string, unknown>): Promise<boolean> {
+    const affectedRows = await (this as any).updateAll(updates, { id: { op: "equal", value: id}});
     return affectedRows > 0;
   }
 
-  static async count<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions?: Partial<I>): Promise<number> {
+  static async count<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions?: Condition): Promise<number> {
     const proto = this.prototype;
-    const normalizedConditions = BaseEntity.whitelistAndMapDbColums(proto, conditions);
-    const values = Object.values(normalizedConditions);
+    const normalizedConditions = conditions ? BaseEntity.whitelistAndMapDbColums(proto, conditions) : {};
     const query = DB.driver.getCountQuery(BaseEntity.getTableName(this), normalizedConditions) as string;
-    const result = await DB.driver.execute(query, values);
+    const conditionParams = DB.driver.getConditionParams?.(normalizedConditions) ?? [];
+    const result = await DB.driver.execute(query, conditionParams);
     const count = result.rows?.[0]?.count;
     return typeof count === "number" ? count : Number(count ?? 0);
   }
