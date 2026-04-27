@@ -43,29 +43,29 @@ export abstract class BaseEntity implements IBaseEntity {
   }
 
   private static whitelistAndMapDbColums(proto: object, conditions?: Condition): Condition {
-    const mapAndWhiteList: Condition = {};
-    if (conditions && Object.keys(conditions).length > 0) {
-      Object.entries(conditions).forEach(([property, expression]) => {
-        if (Reflect.getMetadata(COLUMN_METADATA_KEY, proto, property)) {
-          const { dbColumnName } = getColumnSqlName(proto, property);
-          mapAndWhiteList[dbColumnName] = expression;
-        }
-      });
-    }
-    return mapAndWhiteList;
+    if (!conditions || Object.keys(conditions).length === 0) return {};
+
+    return Object.entries(conditions).reduce((accumulator, [property, expression]) => {
+
+      if (Reflect.getMetadata(COLUMN_METADATA_KEY, proto, property)) {
+        const { dbColumnName } = getColumnSqlName(proto, property);
+        return { ...accumulator, [dbColumnName]: expression };
+      }
+
+      return accumulator;
+    }, {});
   }
 
   private static whitelistAndMapUpdateColumns(proto: object, updates?: Record<string, unknown>): Record<string, unknown> {
-    const mappedUpdates: Record<string, unknown> = {};
-    if (updates && Object.keys(updates).length > 0) {
-      Object.entries(updates).forEach(([property, value]) => {
-        if (Reflect.getMetadata(COLUMN_METADATA_KEY, proto, property)) {
-          const { dbColumnName } = getColumnSqlName(proto, property);
-          mappedUpdates[dbColumnName] = value;
-        }
-      });
-    }
-    return mappedUpdates;
+    if (!updates || Object.keys(updates).length === 0) return {};
+
+    return Object.entries(updates).reduce((accumulator, [property, value]) => {
+      if(Reflect.getMetadata(COLUMN_METADATA_KEY, proto, property)) {
+        const { dbColumnName } = getColumnSqlName(proto, property);
+        return { ...accumulator, [dbColumnName]: value }
+      } 
+      return accumulator
+    }, {})
   }
 
   private getUpsertConflictColumns(columns: string[]): string[] {
@@ -77,14 +77,42 @@ export abstract class BaseEntity implements IBaseEntity {
   
 
   async save(): Promise<void> {
-    const ctor = this.constructor;
     const proto = Object.getPrototypeOf(this);
-    const columnMetaData = Object.keys(this).filter(key => Reflect.hasMetadata(COLUMN_METADATA_KEY, proto, key)).filter(key => (this as any)[key] !== undefined).map(key => getColumnSqlName(proto, key))
-    const values = columnMetaData.map(column => (this as any)[column.propertyName])
-    const columns = columnMetaData.map(column => column.dbColumnName)
+
+    const propertyValues = Object.keys(this).reduce<Record<string, unknown>>((acc, key) => {
+      acc[key] = (this as any)[key];
+      return acc;
+    }, {});
+
+    const persistableValues = Object.entries(propertyValues).reduce<Record<string, unknown>>((acc, [key, value]) => {
+      if (value !== undefined) {
+        acc[key] = value;
+      }
+      return acc;
+    }, {});
+
+    const mappedValues = BaseEntity.whitelistAndMapUpdateColumns(proto, persistableValues);
+    const columns = Object.keys(mappedValues);
+    if (columns.length === 0) {
+      throw new Error("Cannot save entity without any mapped columns");
+    }
+
+
     const conflictColumns = this.getUpsertConflictColumns(columns);
-    const query = DB.driver.getUpsertQuery(this.getTableName(), columns, conflictColumns);
-    await DB.driver.execute(query, values);
+    const {sql, params} = DB.driver.getUpsertQuery(this.getTableName(), mappedValues);
+    const result = await DB.driver.execute(sql, params);
+
+    const resolvedId = BaseEntity.resolveNumericId(result.insertedId ?? result.rows?.[0]?.id);
+
+    if (resolvedId !== undefined) {
+      this.id = resolvedId;
+    }
+
+    const returnedRow = result.rows?.[0];
+    if (returnedRow) {
+      this.hydrateFromRow(proto, returnedRow);
+      return;
+    }
   }
 
   static async findById<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, id: number): Promise<T | null> {
@@ -95,9 +123,8 @@ export abstract class BaseEntity implements IBaseEntity {
   static async findAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions?: Condition, limit?: number, offset?: number): Promise<T[]> {
     const proto = this.prototype;
     const normalizedConditions = BaseEntity.whitelistAndMapDbColums(proto, conditions);
-    const query = DB.driver.getSelectQuery(BaseEntity.getTableName(this), ["*"], normalizedConditions, limit, offset) as string;
-    const conditionParams = DB.driver.getConditionParams?.(normalizedConditions) ?? [];
-    const result = await DB.driver.execute(query, conditionParams);
+    const { sql, params } = DB.driver.getSelectQuery(BaseEntity.getTableName(this), ["*"], normalizedConditions, limit, offset);
+    const result = await DB.driver.execute(sql, params);
     const rows = result.rows ?? [];
 
     return rows.map((row: Record<string, unknown>) => {
@@ -125,9 +152,8 @@ export abstract class BaseEntity implements IBaseEntity {
   static async deleteAll<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions: Condition, limit?: number, offset?: number): Promise<number> {
     const proto = this.prototype;
     const normalizedConditions = BaseEntity.whitelistAndMapDbColums(proto, conditions);
-    const query = DB.driver.getDeleteQuery(BaseEntity.getTableName(this), normalizedConditions, limit, offset) as string;
-    const conditionParams = DB.driver.getConditionParams?.(normalizedConditions) ?? [];
-    const result = await DB.driver.execute(query, conditionParams);
+    const { sql, params } = DB.driver.getDeleteQuery(BaseEntity.getTableName(this), normalizedConditions, limit, offset);
+    const result = await DB.driver.execute(sql, params);
     return result.affectedRows;
   }
 
@@ -140,11 +166,8 @@ export abstract class BaseEntity implements IBaseEntity {
     const proto = this.prototype;
     const normalizedUpdates = BaseEntity.whitelistAndMapUpdateColumns(proto, updates);
     const normalizedConditions = BaseEntity.whitelistAndMapDbColums(proto, conditions);
-    const query = DB.driver.getUpdateQuery(BaseEntity.getTableName(this), normalizedUpdates, normalizedConditions) as string;
-    const updateParams = Object.values(normalizedUpdates);
-    const conditionParams = DB.driver.getConditionParams?.(normalizedConditions) ?? [];
-    const params = [...updateParams, ...conditionParams];
-    const result = await DB.driver.execute(query, params);
+    const { sql, params } = DB.driver.getUpdateQuery(BaseEntity.getTableName(this), normalizedUpdates, normalizedConditions);
+    const result = await DB.driver.execute(sql, params);
     return result.affectedRows;
   }
 
@@ -156,11 +179,37 @@ export abstract class BaseEntity implements IBaseEntity {
   static async count<T extends BaseEntity, I extends IBaseEntity>(this: new (entity: I) => T, conditions?: Condition): Promise<number> {
     const proto = this.prototype;
     const normalizedConditions = conditions ? BaseEntity.whitelistAndMapDbColums(proto, conditions) : {};
-    const query = DB.driver.getCountQuery(BaseEntity.getTableName(this), normalizedConditions) as string;
-    const conditionParams = DB.driver.getConditionParams?.(normalizedConditions) ?? [];
-    const result = await DB.driver.execute(query, conditionParams);
+    const { sql, params } = DB.driver.getCountQuery(BaseEntity.getTableName(this), normalizedConditions);
+    const result = await DB.driver.execute(sql, params);
     const count = result.rows?.[0]?.count;
     return typeof count === "number" ? count : Number(count ?? 0);
   }
+
+  private static resolveNumericId(value: unknown): number | undefined {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === "string" && value.trim() !== "" && !Number.isNaN(Number(value))) {
+      return Number(value);
+    }
+    return undefined;
+  }
   
+  private hydrateFromRow(prototype: object, row: Record<string, unknown>): void {
+    const propertyToColumn = Object.keys(this).reduce<Record<string, string>>((acc, propertyName) => {
+      const metadata = getColumnSqlName(prototype, propertyName);
+      if (metadata.dbColumnName) {
+        acc[metadata.dbColumnName] = propertyName;
+      }
+      return acc;
+    }, {});
+
+    for (const [columnName, value] of Object.entries(row)) {
+      const propertyName = propertyToColumn[columnName] ?? columnName;
+      if (propertyName in this) {
+        (this as Record<string, unknown>)[propertyName] = value;
+      }
+    }
+  }
+
 }

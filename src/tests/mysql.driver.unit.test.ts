@@ -4,37 +4,62 @@ import { test } from "node:test";
 import { MySqlDriver } from "../drivers/mysql.driver.js";
 import type { Condition } from "../core/expression.js";
 
-test("query helpers build escaped SQL", () => {
+test("select query", () => {
   const driver = new MySqlDriver({});
 
-  assert.equal(
-    driver.getSelectQuery("users", ["*"], { email: { op: "equal", value: "a@example.com" } }, 10, 5),
-    "SELECT * FROM `users` WHERE `email` = ? LIMIT 10 OFFSET 5"
-  );
+  const { sql, params } = driver.getSelectQuery("users", ["*"], { email: { op: "equal", value: "a@example.com" } }, 10, 5);
 
   assert.equal(
-    driver.getUpdateQuery(
+    sql,
+    "SELECT * FROM `users` WHERE `email` = ? LIMIT 10 OFFSET 5"
+  );
+  assert.deepEqual(params, ["a@example.com"]);
+})
+
+test("update query", () => {
+  const driver = new MySqlDriver({});
+  const { sql, params } = driver.getUpdateQuery(
       "users",
       { name: "John", updated_at: "2026-04-26T18:36:55.106Z" },
       { id: { op: "equal", value: 1 } }
-    ),
+    );
+  assert.equal(
+    sql,
     "UPDATE `users` SET `name` = ?, `updated_at` = ? WHERE `id` = ?"
   );
+  assert.deepEqual(params, ["John", "2026-04-26T18:36:55.106Z", 1]);
+})
+
+test("delete query", () => {
+  const driver = new MySqlDriver({});
+  const { sql, params } = driver.getDeleteQuery("users", { id: { op: "equal", value: 1 } }, 1);
 
   assert.equal(
-    driver.getDeleteQuery("users", { id: { op: "equal", value: 1 } }, 1),
+    sql,
     "DELETE FROM `users` WHERE `id` = ? LIMIT 1"
   );
+  assert.deepEqual(params, [1]);
+})
 
+test("count query", () => {
+  const driver = new MySqlDriver({});
+  const { sql, params } = driver.getCountQuery("users", { name: { op: "equal", value: "Varun" } });
   assert.equal(
-    driver.getCountQuery("users", { name: { op: "equal", value: "Varun" } }),
+    sql,
     "SELECT COUNT(*) AS count FROM `users` WHERE `name` = ?"
   );
+  assert.deepEqual(params, ["Varun"]);
+})
 
+
+test("upsert query", () => {
+  const driver = new MySqlDriver({});
+  const { sql, params } = driver.getUpsertQuery("users", { id: 1, name: "Varun", created_at: "2023-01-01T00:00:00.000Z", updated_at: "2023-01-01T00:00:00.000Z" });
   assert.equal(
-    driver.getUpsertQuery("users", ["id", "name", "created_at", "updated_at"]),
+    sql,
     "INSERT INTO `users` (`id`, `name`, `created_at`, `updated_at`) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE `name` = VALUES(`name`), `updated_at` = VALUES(`updated_at`)"
   );
+  assert.deepEqual(params, [1, "Varun", "2023-01-01T00:00:00.000Z", "2023-01-01T00:00:00.000Z"]);
 });
 
 test("condition params follow operator semantics", () => {
@@ -47,10 +72,13 @@ test("condition params follow operator semantics", () => {
     deleted_at: { op: "equal", value: null }
   };
 
+  const { sql, params } = driver.getSelectQuery("users", ["id", "name"], conditions);
+
   assert.equal(
-    driver.getSelectQuery("users", ["id", "name"], conditions),
-    "SELECT `id`, `name` FROM `users` WHERE `name` LIKE ?% AND `email` LIKE %?% AND `age` >= ? AND `deleted_at` IS NULL"
+    sql,
+    "SELECT `id`, `name` FROM `users` WHERE `name` LIKE ? AND `email` LIKE ? AND `age` >= ? AND `deleted_at` IS NULL"
   );
+  assert.deepEqual(params, ["Va%", "%@example.com%", 18]);
 });
 
 test("condition params support endsWith and notEqual null", () => {
@@ -61,19 +89,23 @@ test("condition params support endsWith and notEqual null", () => {
     archived_at: { op: "notEqual", value: null }
   };
 
+  const { sql, params } = driver.getDeleteQuery("users", conditions);
   assert.equal(
-    driver.getDeleteQuery("users", conditions),
-    "DELETE FROM `users` WHERE `city` LIKE %? AND `archived_at` IS NOT NULL"
+    sql,
+    "DELETE FROM `users` WHERE `city` LIKE ? AND `archived_at` IS NOT NULL"
   );
+  assert.deepEqual(params, ["%pur"]);
 });
 
 test("limit/offset keeps zero values", () => {
   const driver = new MySqlDriver({});
 
+  const { sql, params } = driver.getSelectQuery("users", ["*"], undefined, 0, 0);
   assert.equal(
-    driver.getSelectQuery("users", ["*"], undefined, 0, 0),
+    sql,
     "SELECT * FROM `users` LIMIT 0 OFFSET 0"
   );
+  assert.deepEqual(params, []);
 });
 
 test("execute throws when not connected", async () => {

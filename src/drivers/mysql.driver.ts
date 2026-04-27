@@ -1,5 +1,5 @@
 import type { Connection, ConnectionOptions } from "mysql2/promise";
-import type { DatabaseDriverResult, IDatabaseDriver } from "../core/db.js";
+import type { DatabaseDriverResult, IDatabaseDriver, QueryData } from "../core/db.js";
 import type { Condition } from "../core/expression.js";
 import { createConnection } from "mysql2/promise";
 
@@ -25,52 +25,68 @@ export class MySqlDriver implements IDatabaseDriver  {
     return this.escapeIdentifier(columnName)
   }
 
-  private getWhereClause(conditions?: Condition): string {
+  private getWhereClause(conditions?: Condition): { whereClause: string, params: unknown[]} {
     if (!conditions || Object.keys(conditions).length === 0) {
-      return ""
+      return {
+        whereClause: "",
+        params: []
+      }
     }
+    const params: unknown[] = [];
 
     const predicates = Object.entries(conditions).map(([column, expression]) => {
-      const safeColumn = this.escapeColumnName(column);
+      const escapedColumn = this.escapeColumnName(column);
       const value = expression.value;
 
       switch (expression.op) {
         case "equal":
           if (value === null) {
-            return `${safeColumn} IS NULL`;
+            return `${escapedColumn} IS NULL`;
           }
-          return `${safeColumn} = ${this.getPlaceholderPrefix()}`;
+          params.push(value)
+          return `${escapedColumn} = ${this.getPlaceholderPrefix()}`;
 
         case "notEqual":
           if (value === null) {
-            return `${safeColumn} IS NOT NULL`;
+            return `${escapedColumn} IS NOT NULL`;
           }
-          return `${safeColumn} != ${this.getPlaceholderPrefix()}`;
+          params.push(value)
+          return `${escapedColumn} != ${this.getPlaceholderPrefix()}`;
 
         case "greaterThan":
-          return `${safeColumn} > ${this.getPlaceholderPrefix()}`;
+          params.push(value)
+          return `${escapedColumn} > ${this.getPlaceholderPrefix()}`;
 
         case "lessThan":
-          return `${safeColumn} < ${this.getPlaceholderPrefix()}`;
+          params.push(value)
+          return `${escapedColumn} < ${this.getPlaceholderPrefix()}`;
 
         case "greaterThanOrEqual":
-          return `${safeColumn} >= ${this.getPlaceholderPrefix()}`;
+          params.push(value)
+          return `${escapedColumn} >= ${this.getPlaceholderPrefix()}`;
 
         case "lessThanOrEqual":
-          return `${safeColumn} <= ${this.getPlaceholderPrefix()}`;
+          params.push(value)
+          return `${escapedColumn} <= ${this.getPlaceholderPrefix()}`;
 
         case "startsWith":
-          return `${safeColumn} LIKE ${this.getPlaceholderPrefix()}%`;
-
-        case "endsWith":
-          return `${safeColumn} LIKE %${this.getPlaceholderPrefix()}`;
-
-        case "contains":
-          return `${safeColumn} LIKE %${this.getPlaceholderPrefix()}%`;
+          params.push(`${value}%`)
+          return `${escapedColumn} LIKE ${this.getPlaceholderPrefix()}`;
+          
+          case "endsWith":
+          params.push(`%${value}`)
+          return `${escapedColumn} LIKE ${this.getPlaceholderPrefix()}`;
+          
+          case "contains":
+          params.push(`%${value}%`)
+          return `${escapedColumn} LIKE ${this.getPlaceholderPrefix()}`;
       }
     });
 
-    return ` WHERE ${predicates.join(" AND ")}`;
+    return {
+      whereClause: ` WHERE ${predicates.join(" AND ")}`,
+      params
+    }
   }
 
   private getLimitOffset(limit?: number, offset?: number): string {
@@ -127,48 +143,74 @@ export class MySqlDriver implements IDatabaseDriver  {
     return '?';
   }
 
-  getInsertQuery(tableName: string, columns: string[]): string {
+  getInsertQuery(tableName: string, values: Record<string, unknown>): QueryData {
     const escapedTableName = this.escapeTableName(tableName);
+    const columns = Object.keys(values);
+    const data = Object.values(values);
     const escapedColumns = columns.map((column) => this.escapeColumnName(column)).join(', ');
     const placeholders = columns.map(() => this.getPlaceholderPrefix()).join(', ');
-    return `INSERT INTO ${escapedTableName} (${escapedColumns}) VALUES (${placeholders})`
+    return {
+      sql: `INSERT INTO ${escapedTableName} (${escapedColumns}) VALUES (${placeholders})`,
+      params: data
+    }
   }
 
-  getUpsertQuery(tableName: string, columns: string[]): string {
+  getUpsertQuery(tableName: string, values: Record<string, unknown>): QueryData {
     const escapedTableName = this.escapeTableName(tableName);
+    const columns = Object.keys(values);
+    const data = Object.values(values);
     const escapedColumns = columns.map((column) => this.escapeColumnName(column));
     const placeholders = columns.map(() => this.getPlaceholderPrefix()).join(', ');
     const update = columns
       .filter(column => column !== 'id' && column !== 'created_at')
       .map((column) => {
-        const safeColumn = this.escapeColumnName(column);
-        return `${safeColumn} = VALUES(${safeColumn})`;
+        const escapedColumn = this.escapeColumnName(column);
+        return `${escapedColumn} = VALUES(${escapedColumn})`;
       })
       .join(', ')
-    return `INSERT INTO ${escapedTableName} (${escapedColumns.join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${update}`
+    return {
+      sql: `INSERT INTO ${escapedTableName} (${escapedColumns.join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${update}`,
+      params: data
+    }
   }
 
-  getUpdateQuery(tableName: string, updates: Record<string, unknown>, conditions: Condition): string {
+  getUpdateQuery(tableName: string, updates: Record<string, unknown>, conditions: Condition): QueryData {
     const escapedTableName = this.escapeTableName(tableName);
     const updatePairs = Object.entries(updates).map(([column]) =>
       `${this.escapeColumnName(column)} = ?`
     ).join(', ');
-    return `UPDATE ${escapedTableName} SET ${updatePairs}${this.getWhereClause(conditions)}`;
+    const { whereClause, params } = this.getWhereClause(conditions);
+    return {
+      sql: `UPDATE ${escapedTableName} SET ${updatePairs}${whereClause}`,
+      params: [...Object.values(updates), ...params]
+    };
   }
 
-  getDeleteQuery(tableName: string, conditions: Condition, limit?: number, offset?: number): string {
+  getDeleteQuery(tableName: string, conditions: Condition, limit?: number, offset?: number): QueryData {
     const escapedTableName = this.escapeTableName(tableName);
-    return `DELETE FROM ${escapedTableName}${this.getWhereClause(conditions)}${this.getLimitOffset(limit, offset)}`;
+    const { whereClause, params } = this.getWhereClause(conditions);
+    return {
+      sql: `DELETE FROM ${escapedTableName}${whereClause}${this.getLimitOffset(limit, offset)}`,
+      params: params
+    };
   }
 
-  getSelectQuery(tableName: string, columns: string[], conditions?: Condition, limit?: number, offset?: number): string {
+  getSelectQuery(tableName: string, columns: string[], conditions?: Condition, limit?: number, offset?: number): QueryData {
     const escapedTableName = this.escapeTableName(tableName);
     const escapedColumns = columns.map((column) => this.escapeColumnName(column)).join(', ');
-    return `SELECT ${escapedColumns} FROM ${escapedTableName}${this.getWhereClause(conditions)}${this.getLimitOffset(limit, offset)}`;
+    const { whereClause, params } = this.getWhereClause(conditions);
+    return {
+      sql: `SELECT ${escapedColumns} FROM ${escapedTableName}${whereClause}${this.getLimitOffset(limit, offset)}`,
+      params: params
+    };
   }
 
-  getCountQuery(tableName: string, conditions?: Condition): string {
+  getCountQuery(tableName: string, conditions?: Condition): QueryData {
     const escapedTableName = this.escapeTableName(tableName);
-    return `SELECT COUNT(*) AS count FROM ${escapedTableName}${this.getWhereClause(conditions)}`;
+    const { whereClause, params } = this.getWhereClause(conditions);
+    return {
+      sql: `SELECT COUNT(*) AS count FROM ${escapedTableName}${whereClause}`,
+      params: params
+    };
   }
 }
